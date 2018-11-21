@@ -1,0 +1,186 @@
+<body>
+            <div id="app">
+                 <router-view></router-view>
+            </div>  
+</body>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.16/vue.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/vue-router/3.0.1/vue-router.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/vuex/3.0.1/vuex.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.js'></script>
+      <script>
+            let List={
+                //es6 template string
+            template:
+            `  <div>
+                     <p>
+                     <input type="text" v-model.trim="input">  <!-- trim去頭尾空白 -->
+                     <a href="javascript:;" v-on:click="createHandler" >CREATE</a>
+                    </p>
+                    <ol>
+                        <!-- key改成data-test可以看一下長怎樣-->
+                        <li v-for="(object,index) in contents" :key="object.id">
+                        {{object.content}}
+                        <a href="javascript:;"  v-on:click="updateHandler(index)">UPDATE</a>
+                        <a href="javascript:;" v-on:click="deleteHandler(index)" >DELETE</a>
+                         </li>
+                     </ol>
+                    </div> `,
+            data: function(){
+                        return{
+                            input: '' ,
+                      //      contents: []   已經用computed取代
+                              }},
+            computed:{
+                contents(){
+                    return this.$store.state.contents ;
+                }
+            },
+            methods:{
+                createHandler(){
+                    if (!this.input) return false   //input 為空白不增加
+                    console.log('click',this.input)
+                    axios.post('http://localhost:3000/users',{
+                        content: this.input
+                    }).then((res)=>{
+                        this.input = ''
+                       // this.contents.push(res.data)  //push到contents的陣列 非json的
+                        this.$store.commit('addContents', res.data)   //直接進mutaiton改寫
+                    })
+                },
+                deleteHandler(index){
+                    let target = this.contents[index]   //client端跟後端連結
+                    //es6 template string
+                   // axios.delete(`http://localhost:3000/users/${target.id}`).then((res)=>{
+                   //     this.contents.splice(index, 1)
+                   // })
+                   this.$store.dispatch('CONTENT_DELETE', {target})
+                },
+                updateHandler(index){
+                    let target = this.contents[index];
+                    //es6
+                    this.$router.push({ name: 'update', params : {id: target.id} });
+                    //this.$router.push({ path: `/update/${target.id}`}) //也可寫成({ path: '/update/' + target.id}) 
+                    //push可以改成但沒有上一頁 this.$router.replace({ path: '/update/' + target.id}) 
+                }},
+                mounted(){ //用computed取代
+                //    axios.get('http://localhost:3000/users').then((res)=>{
+                //  alert(  JSON.stringify( res.data) ) ;
+                //   this.contents = res.data
+                // })
+                }
+            }
+            let Edit={
+                template: `<div>
+                <p>
+                    <input type="text" v-model="input">
+                    <a href="javascript:;" v-on:click="updateHandler">UPDATE</a>
+                    </p>
+                    </div>
+                `,
+                data() {
+                    return {
+                        input: ''
+                    }
+                },
+                computed:{
+                    content(){
+                       return   this.$store.state.contents.find((item)=>{
+                       return item.id = this.$route.params.id ;
+                    })
+                }
+            },
+            methods: {
+                updateHandler() {
+                    this.$store.dispatch('CONTENT_UPDATE', {
+                        id: this.content.id,
+                        input: this.input
+                    }).then(()=>{
+                        this.$router.push({ path: '/'})
+                    })
+                }
+            },
+            mounted(){
+                if (!this.content) return this.$router.replace({ path: '/' }) ;
+                this.input = this.content.content ;
+            }
+            }
+            
+            let store = new Vuex.Store({
+                strict: true , //嚴格模式 
+                state:{
+                    contents: [] 
+     
+                },
+                mutations: {
+                    setContents(state, data) {    
+                        state.contents = data ;
+                        console.log('haha')
+                    },
+                    addContents(state, data) {
+                        state.contents.push(data)
+                    },
+                    deleteContent(state, data) {
+                        state.contents.splice(data, 1) //這個data是CONTENT_DELETE的index
+                    },
+                    updateContent(state,{item, input}){
+                        item.content = input
+                    }
+                },
+                actions: {
+                    CONTENTS_READ: (context)=>{
+                        console.log('read')
+                      return  axios.get('http://localhost:3000/users').then((res) => {
+                          context.commit('setContents',res.data)
+                      })
+                    },      
+                    CONTENT_UPDATE: (context,{id, input})=>{
+                      console.log('UPDATE')
+                      let item = context.state.contents.find((item)=>{
+                          return item.id =id
+                      })
+                      if (!item) return false
+                      return axios.patch('http://localhost:3000/users/' + item.id, { content:input }).then((res)=>{
+                          context.commit('updateContent', { item, input })
+                      })
+                      
+                    },
+                    CONTENT_DELETE: (context, {target})=> {
+                        let index = context.state.contents.indexOf(target)
+                        if (index == -1) return false
+                        return axios.delete('http://localhost:3000/users/' + target.id).then((res)=> {
+                            context.commit('deleteContent', index)
+                        })
+                    }
+                }
+            })
+
+            let router = new VueRouter({
+                routes:[
+                    {
+                        path:'/',
+                        name: 'list',
+                        component: List
+                    },
+                    {
+                        path:'/update/:id',
+                        name: 'update',
+                        component: Edit
+                    },
+                    {
+                        path: '*',
+                        redirect: '/'
+                    }
+                ]
+            })
+
+
+          new Vue({
+              el:'#app',
+             router ,
+             store,
+             mounted() {
+                 this.$store.dispatch('CONTENTS_READ')
+             }
+          })
+          </script>
+  
